@@ -1,0 +1,87 @@
+```{r}
+library(plyr)
+library(mi)
+library(data.table)
+library(dplyr)
+library(scales)
+library(mltools)
+library(psych)
+library(ggplot2)
+library(xgboost)
+library(pdp)           # for partial dependence plots
+library(Rcpp)
+library(pROC)
+
+
+trait_data_wlabel = read.csv("train_data.csv")
+setDT(trait_data_wlabel)
+species = trait_data_wlabel[,1]
+#traits without species
+traits = trait_data_wlabel[,2:84]
+#traits <- lapply(traits, as.numeric)
+#label of leish
+leish = trait_data_wlabel[,84]
+
+#get the parameter dataframe
+params = read.csv("original_models_parameters_10.csv")
+#make max_depth, scale_pos_weight, and num_estimators into integers using floor()
+params$max_depth = floor(params$max_depth)
+params$scale_pos_weight = floor(params$scale_pos_weight)
+params$n_estimators = floor(params$n_estimators)
+
+#train the 100 models, store them in a list, then create pdps
+
+
+########TEST TRAIN SPLIT#######
+
+data1 = sort(sample(nrow(traits), nrow(traits)*.8))
+#creating training data set by selecting the output row values
+train1<-traits[data1,]
+#creating test data set by not selecting the output row values
+test<-traits[-data1,]
+
+#define predictor and response variables in training set
+train_x = data.matrix(train1[, 1:82])
+train_y = data.matrix(train1[,83])
+train_y = lapply(train_y, as.numeric)
+
+#define predictor and response variables in testing set
+test_x = data.matrix(test[, 1:82])
+test_y = data.matrix(test[, 83])
+test_y = lapply(test_y, as.numeric)
+
+
+#define final training and testing sets
+#options(na.action='na.pass')
+#xgb_train = xgb.DMatrix(data = train_x, label = train_y)
+#xgb_test = xgb.DMatrix(data = test_x, label = test_y)
+
+
+predicted <- predict(model2, test_x, type="response")
+auc(test_y, predicted)
+
+model2 = xgboost(data = train_x, label = train_y, base_score=0.5, 
+               booster='gbtree', colsample_bylevel=1,
+               colsample_bynode=1, colsample_bytree=1, eval_metric='logloss',
+               gamma=0,learning_rate=0.300000012,
+               max_delta_step=0, max_depth=6, min_child_weight=1, n_estimators=100, n_jobs=8,
+               num_parallel_tree=1,
+               colsample_bytree= 0.479751145665602,
+               learning_rate = 0.8186861142538753, max_depth = 5,
+                       n_estimators= 181.7052114721491,
+                       scale_pos_weight= 14.890098428327365, nrounds = 100, early_stopping_rounds = 10, alpha=0, lambda=1, scale_pos_weight=1,
+               subsample=1, tree_method='exact', validate_parameters=1, objective = 'binary:logistic')
+
+
+p1 <- partial(model, pred.var = "wing.length", plot = TRUE, rug = TRUE, train = train_x)
+
+p2 <- partial(model2, pred.var = "log.citations", plot = TRUE,
+              plot.engine = "ggplot2", train = train_x)
+
+p3 <- partial(model, pred.var = "log.citations", ice = TRUE, center = TRUE, 
+              plot = TRUE, rug = TRUE, alpha = 0.1, plot.engine = "ggplot2",
+              train = train_x)
+
+
+```
+
